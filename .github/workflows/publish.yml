@@ -1,39 +1,67 @@
-name: Publish Logseq plugin
+name: Publish
 
 on:
+  push:
+    tags:
+      - "v*"
   release:
     types:
       - published
   workflow_dispatch:
-
-permissions:
-  contents: write
+    inputs:
+      tag:
+        description: "Tag name to publish (e.g. v0.1.0). Must exist in the repo."
+        required: true
+        type: string
 
 jobs:
-  release:
+  build-and-release:
     runs-on: ubuntu-latest
-    steps:
-      - name: Check out release tag
-        uses: actions/checkout@v4
+    permissions:
+      contents: write
 
-      - name: Set up Node.js
+    steps:
+      - name: Determine tag
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "Missing tag name" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
+      - name: Install
         run: npm ci
 
       - name: Verify release
         run: npm run check
 
       - name: Validate tag version
-        if: github.event_name == 'release'
         shell: bash
         run: |
           package_version="$(node -p "require('./package.json').version")"
-          test "${GITHUB_REF_NAME}" = "v${package_version}"
+          test "${{ steps.meta.outputs.tag }}" = "v${package_version}"
 
       - name: Assemble installable plugin
         shell: bash
@@ -43,21 +71,12 @@ jobs:
           cp dist/index.js release-package/dist/
           (
             cd release-package
-            zip -r "../logseq-plus-minus-next-${GITHUB_REF_NAME}.zip" .
+            zip -r "../logseq-plus-minus-next-${{ steps.meta.outputs.tag }}.zip" .
           )
 
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: logseq-plus-minus-next-${{ github.ref_name }}
-          path: logseq-plus-minus-next-${{ github.ref_name }}.zip
-          if-no-files-found: error
-
-      - name: Attach ZIP to GitHub release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release upload "${GITHUB_REF_NAME}"
-          "logseq-plus-minus-next-${GITHUB_REF_NAME}.zip"
-          --clobber
+          tag_name: ${{ steps.meta.outputs.tag }}
+          files: logseq-plus-minus-next-${{ steps.meta.outputs.tag }}.zip
+          fail_on_unmatched_files: true
