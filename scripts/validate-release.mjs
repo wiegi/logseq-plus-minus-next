@@ -28,7 +28,7 @@ for (const file of [
   "LICENSE",
   "README.md",
   "CHANGELOG.md",
-  "docs/preview.svg",
+  "docs/preview1.png",
   "marketplace/manifest.json"
 ]) {
   try {
@@ -38,7 +38,7 @@ for (const file of [
   }
 }
 
-if (!readme.includes("docs/preview.svg")) {
+if (!readme.includes("docs/preview1.png")) {
   failures.push("README does not include the plugin preview");
 }
 
