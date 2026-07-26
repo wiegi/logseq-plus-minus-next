@@ -1,0 +1,51 @@
+{
+  "name": "logseq-plus-minus-next",
+  "version": "0.1.0",
+  "description": "A native, three-column Plus / Minus / Next reflection board for Logseq.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "validate:release": "node scripts/validate-release.mjs",
+    "check": "npm run typecheck && npm run build && npm run validate:release"
+  },
+  "keywords": [
+    "logseq",
+    "reflection",
+    "journaling",
+    "plus-minus-next",
+    "weekly-review"
+  ],
+  "author": "wiegi",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/wiegi/logseq-plus-minus-next#readme",
+  "bugs": {
+    "url": "https://github.com/wiegi/logseq-plus-minus-next/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wiegi/logseq-plus-minus-next.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist/index.js",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "logseq": {
+    "id": "logseq-plus-minus-next",
+    "title": "Plus Minus Next",
+    "icon": "icon.svg"
+  },
+  "dependencies": {
+    "@logseq/libs": "0.0.17"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "typescript": "7.0.2"
+  }
+}
