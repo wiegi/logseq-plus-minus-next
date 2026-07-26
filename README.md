@@ -10,7 +10,7 @@ A simple three-column reflection board for Logseq, based on the
 The plugin presents these prompts from left to right while keeping every entry
 as a normal Logseq block.
 
-![Plus Minus Next board preview](docs/preview.svg)
+![Plus Minus Next board preview](docs/preview1.png)
 
 
 ## Usage
@@ -24,7 +24,7 @@ prompt.
 
 ## Features
 
-- Three dedicated Plus, Minus, and Next columns
+- Three dedicated Plus, Minus and Next columns
 - Automatically growing column height
 - Board is stored as an ordinary logseq outline with special representation, means if the plugin is disabled or removed, data is still readable and editable.
 - No network requests
