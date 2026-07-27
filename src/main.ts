@@ -210,7 +210,7 @@ async function insertBoard(reuseEmptyCurrentBlock = false): Promise<void> {
 
     if (currentBlock?.uuid) {
       const canReuseCurrentBlock =
-        reuseEmptyCurrentBlock && currentBlock.content.trim() === "";
+        reuseEmptyCurrentBlock && (currentBlock.content ?? "").trim() === "";
 
       if (canReuseCurrentBlock) {
         await logseq.Editor.updateBlock(currentBlock.uuid, BOARD_TITLE);
@@ -268,6 +268,13 @@ async function insertBoard(reuseEmptyCurrentBlock = false): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Register the primary command first. Optional UI and maintenance setup
+  // must not prevent the plugin's core command from becoming available.
+  logseq.Editor.registerSlashCommand(
+    "Plus Minus Next: Insert reflection board",
+    () => insertBoard(true)
+  );
+
   logseqDocument = getLogseqDocument();
   logseqDocument.addEventListener(
     "keydown",
@@ -325,11 +332,6 @@ async function main(): Promise<void> {
         `
       });
     }
-  );
-
-  logseq.Editor.registerSlashCommand(
-    "Plus Minus Next: Insert reflection board",
-    () => insertBoard(true)
   );
 
   await maintainCurrentPageBoards().catch((error) => {

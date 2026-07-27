@@ -7,6 +7,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-27
+
+### Fixed
+
+- Register the slash command before optional UI and maintenance hooks so it is
+  available after installing the plugin from the Logseq Marketplace.
+- Update the Logseq SDK and its bundled security-sensitive dependencies.
+
 ## [0.1.0] - 2026-07-25
 
 ### Added
@@ -30,5 +38,6 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - First-level reflection bullets now use a compact base-level gutter instead of
   appearing as an extra indented outline level.
 
-[Unreleased]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/wiegi/logseq-plus-minus-next/releases/tag/v0.1.0

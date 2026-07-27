@@ -1,6 +1,6 @@
 {
   "name": "logseq-plus-minus-next",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A native, three-column Plus / Minus / Next reflection board for Logseq.",
   "main": "dist/index.js",
   "scripts": {
@@ -41,11 +41,13 @@
     "title": "Plus Minus Next",
     "icon": "icon.svg"
   },
-  "dependencies": {
-    "@logseq/libs": "0.0.17"
-  },
   "devDependencies": {
+    "@logseq/libs": "^0.2.12",
     "esbuild": "0.28.1",
     "typescript": "7.0.2"
+  },
+  "overrides": {
+    "dompurify": "3.4.12",
+    "lodash-es": "4.18.1"
   }
 }
