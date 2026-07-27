@@ -10,6 +10,7 @@ const columnDescriptions = {
   minus: "What did not work, felt difficult, or created friction?",
   next: "What will you change, try, or prioritise next?"
 } as const;
+const columnNames = ["plus", "minus", "next"] as const;
 
 const columns = [
   {
@@ -153,6 +154,16 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
+function getColumnIndex(block: BoardBlock): number {
+  const content = block.content ?? "";
+
+  return columnNames.findIndex(
+    (columnName, index) =>
+      content.includes(`{{renderer :pmn-info, ${columnName}}}`) ||
+      legacyColumns[index].contents.includes(content)
+  );
+}
+
 async function maintainCurrentPageBoards(): Promise<void> {
   if (maintenanceRunning) return;
   maintenanceRunning = true;
@@ -164,15 +175,35 @@ async function maintainCurrentPageBoards(): Promise<void> {
     async function visit(block: BoardBlock): Promise<void> {
       if (block.content?.includes(BOARD_TAG) && block.children) {
         registerBoardUuid(block.uuid);
+        let precedingColumn: BoardBlock | undefined;
 
-        for (const column of block.children.slice(0, 3)) {
-          const legacy = legacyColumns.find(
-            ({ contents }) =>
-              column.content !== undefined && contents.includes(column.content)
-          );
+        for (const child of block.children) {
+          const columnIndex = getColumnIndex(child);
 
-          if (legacy && column.uuid) {
-            await logseq.Editor.updateBlock(column.uuid, legacy.replacement);
+          if (columnIndex >= 0) {
+            precedingColumn = child;
+            const legacy = legacyColumns[columnIndex];
+
+            if (
+              child.uuid &&
+              child.content !== undefined &&
+              legacy.contents.includes(child.content)
+            ) {
+              await logseq.Editor.updateBlock(child.uuid, legacy.replacement);
+            }
+            continue;
+          }
+
+          /*
+           * In the marketplace iframe sandbox we cannot intercept key events
+           * from Logseq's editor. Pressing Enter on an empty entry therefore
+           * briefly outdents it into a direct board child. Move any such child
+           * back beneath the column that precedes it.
+           */
+          if (child.uuid && precedingColumn?.uuid) {
+            await logseq.Editor.moveBlock(child.uuid, precedingColumn.uuid, {
+              children: true
+            });
           }
         }
       }
@@ -343,7 +374,7 @@ async function main(): Promise<void> {
   });
 
   logseq.DB.onChanged(() => {
-    scheduleBoardMaintenance();
+    scheduleBoardMaintenance(0);
   });
 
   console.info("[Plus Minus Next] Plugin loaded");
