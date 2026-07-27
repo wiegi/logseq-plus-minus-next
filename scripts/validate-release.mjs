@@ -3,7 +3,9 @@ import { access, readFile, stat } from "node:fs/promises";
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
 const readme = await readFile("README.md", "utf8");
 const changelog = await readFile("CHANGELOG.md", "utf8");
-const bundle = await readFile(pkg.main, "utf8");
+const mainEntry = await readFile(pkg.main, "utf8");
+const bundlePath = "dist/index.js";
+const bundle = await readFile(bundlePath, "utf8");
 
 const failures = [];
 
@@ -24,6 +26,7 @@ requireValue("Logseq plugin icon", pkg.logseq?.icon);
 
 for (const file of [
   pkg.main,
+  bundlePath,
   pkg.logseq?.icon,
   "LICENSE",
   "README.md",
@@ -50,11 +53,15 @@ if (!changelog.includes(`## [${pkg.version}]`)) {
   failures.push(`CHANGELOG has no ${pkg.version} release entry`);
 }
 
+if (!mainEntry.includes("./index.js")) {
+  failures.push(`${pkg.main} does not load the plugin bundle`);
+}
+
 if (!bundle.includes("pmn-board") || !bundle.includes("registerSlashCommand")) {
   failures.push("built bundle does not contain the expected plugin entry points");
 }
 
-const bundleStats = await stat(pkg.main);
+const bundleStats = await stat(bundlePath);
 if (bundleStats.size === 0) {
   failures.push("built bundle is empty");
 }

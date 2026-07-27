@@ -68,7 +68,7 @@ jobs:
         run: |
           mkdir -p release-package/dist
           cp package.json README.md LICENSE icon.svg release-package/
-          cp dist/index.js release-package/dist/
+          cp dist/index.html dist/index.js release-package/dist/
           (
             cd release-package
             zip -r "../logseq-plus-minus-next-${{ steps.meta.outputs.tag }}.zip" .

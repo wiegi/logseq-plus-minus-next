@@ -1,8 +1,8 @@
 {
   "name": "logseq-plus-minus-next",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A native, three-column Plus / Minus / Next reflection board for Logseq.",
-  "main": "dist/index.js",
+  "main": "dist/index.html",
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
@@ -31,6 +31,7 @@
     "node": ">=20"
   },
   "files": [
+    "dist/index.html",
     "dist/index.js",
     "icon.svg",
     "README.md",

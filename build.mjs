@@ -1,6 +1,10 @@
 import { build, context } from "esbuild";
+import { copyFile, mkdir } from "node:fs/promises";
 
 const watch = process.argv.includes("--watch");
+
+await mkdir("dist", { recursive: true });
+await copyFile("index.html", "dist/index.html");
 
 const options = {
   entryPoints: ["src/main.ts"],
