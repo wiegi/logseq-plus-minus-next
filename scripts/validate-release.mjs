@@ -1,6 +1,9 @@
 import { access, readFile, stat } from "node:fs/promises";
 
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
+const marketplaceManifest = JSON.parse(
+  await readFile("marketplace/manifest.json", "utf8")
+);
 const readme = await readFile("README.md", "utf8");
 const changelog = await readFile("CHANGELOG.md", "utf8");
 const mainEntry = await readFile(pkg.main, "utf8");
@@ -23,6 +26,12 @@ requireValue("package repository", pkg.repository?.url);
 requireValue("Logseq plugin id", pkg.logseq?.id);
 requireValue("Logseq plugin title", pkg.logseq?.title);
 requireValue("Logseq plugin icon", pkg.logseq?.icon);
+
+if (marketplaceManifest.effect !== true) {
+  failures.push(
+    "marketplace manifest must enable the same-origin sandbox for editor key handling"
+  );
+}
 
 for (const file of [
   pkg.main,

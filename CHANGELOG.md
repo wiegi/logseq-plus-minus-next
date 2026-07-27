@@ -7,6 +7,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-27
+
+### Fixed
+
+- Request the Marketplace same-origin sandbox required to intercept Enter on
+  empty reflection blocks before Logseq outdents them into a new card.
+
 ## [0.1.3] - 2026-07-27
 
 ### Fixed
@@ -54,7 +61,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - First-level reflection bullets now use a compact base-level gutter instead of
   appearing as an extra indented outline level.
 
-[Unreleased]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/wiegi/logseq-plus-minus-next/compare/v0.1.0...v0.1.1
