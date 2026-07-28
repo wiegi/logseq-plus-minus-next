@@ -1,6 +1,6 @@
 {
   "name": "logseq-plus-minus-next",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A native, three-column Plus / Minus / Next reflection board for Logseq.",
   "main": "dist/index.html",
   "scripts": {
