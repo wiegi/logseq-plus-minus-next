@@ -7,6 +7,38 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Support Logseq DB graphs with native DB tags and block titles while retaining
+  the existing Markdown representation for file graphs.
+
+### Fixed
+
+- Apply the three-column card layout through Logseq 2.0's additional
+  `.blocks-list-wrap` outline container while preserving the Logseq 0.10 DOM
+  path.
+- Scope UUID selectors and Enter-key traversal to actual `.ls-block` elements
+  so nested elements carrying the same `blockid` cannot be mistaken for blocks.
+- Keep Plus, Minus, and Next headings visible in Logseq 2.0 by avoiding the
+  block-slot hook, which replaces a block's native outline title.
+- Keep card dimensions and heading typography consistent across Logseq 0.10
+  and 2.0 instead of scaling them with each app's different root font size.
+- Hide the complete native DB tag wrapper so its standalone `#` is not shown
+  beside a board.
+- Restore every board after restarting Logseq 0.10 by batching discovered board
+  UUIDs into one stylesheet and rescanning after page restoration completes.
+- Preserve the file-graph board headline by limiting native tag-wrapper hiding
+  to DB graphs and preventing UUID fallbacks from matching ancestor blocks.
+- Persist `Plus · Minus · Next #.pmn-board` after slash-command insertion and
+  restore it on file-graph boards whose parent title is empty but whose three
+  structural columns are intact.
+- Rediscover Logseq 2.0 boards after restart from the native tag ident, block
+  tag metadata, or their exact title and three-column structure, and repair the
+  native tag when necessary.
+- Recover Logseq 2.0 board UUIDs independently through an exact
+  `:block/title` query and the rendered `.ls-block` DOM, including boards that
+  mount after plugin startup.
+
 ## [0.1.4] - 2026-07-27
 
 ### Fixed

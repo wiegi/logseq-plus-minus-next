@@ -1,10 +1,13 @@
 import "@logseq/libs";
 import { createStyles } from "./styles";
 
-const BOARD_TAG = "#.pmn-board";
-const BOARD_TITLE = `Plus · Minus · Next ${BOARD_TAG}`;
+const FILE_BOARD_TAG = "#.pmn-board";
+const DB_BOARD_TAG = "pmn-board";
+const BOARD_NAME = "Plus · Minus · Next";
+const FILE_BOARD_TITLE = `${BOARD_NAME} ${FILE_BOARD_TAG}`;
 
-const columnHeadings = ["## ＋ Plus", "## − Minus", "## → Next"];
+const fileColumnHeadings = ["## ＋ Plus", "## − Minus", "## → Next"];
+const dbColumnHeadings = ["＋ Plus", "− Minus", "→ Next"];
 const columnDescriptions = {
   plus: "What worked well, felt energising, or should be repeated?",
   minus: "What did not work, felt difficult, or created friction?",
@@ -12,55 +15,104 @@ const columnDescriptions = {
 } as const;
 const columnNames = ["plus", "minus", "next"] as const;
 
-const columns = [
+const fileColumns = [
   {
-    content: `${columnHeadings[0]} {{renderer :pmn-info, plus}}`,
+    content: `${fileColumnHeadings[0]} {{renderer :pmn-info, plus}}`,
     children: [{ content: "" }]
   },
   {
-    content: `${columnHeadings[1]} {{renderer :pmn-info, minus}}`,
+    content: `${fileColumnHeadings[1]} {{renderer :pmn-info, minus}}`,
     children: [{ content: "" }]
   },
   {
-    content: `${columnHeadings[2]} {{renderer :pmn-info, next}}`,
+    content: `${fileColumnHeadings[2]} {{renderer :pmn-info, next}}`,
     children: [{ content: "" }]
   }
 ];
+
+const dbColumns = dbColumnHeadings.map((content) => ({
+  content,
+  children: [{ content: "" }]
+}));
 
 const legacyColumns = [
   {
     contents: [
       "## ＋ Plus\nWhat worked well, felt energising, or should be repeated?",
-      columnHeadings[0]
+      fileColumnHeadings[0]
     ],
-    replacement: columns[0].content
+    replacement: fileColumns[0].content
   },
   {
     contents: [
       "## − Minus\nWhat did not work, felt difficult, or created friction?",
-      columnHeadings[1]
+      fileColumnHeadings[1]
     ],
-    replacement: columns[1].content
+    replacement: fileColumns[1].content
   },
   {
     contents: [
       "## → Next\nWhat will you change, try, or prioritise next?",
-      columnHeadings[2]
+      fileColumnHeadings[2]
     ],
-    replacement: columns[2].content
+    replacement: fileColumns[2].content
   }
 ];
 
 type BoardBlock = {
   uuid?: string;
   content?: string;
+  title?: string;
   children?: BoardBlock[];
+  tags?: BoardTagReference[];
+  "block/tags"?: BoardTagReference[];
 };
 
+type BoardTagReference =
+  | string
+  | {
+      uuid?: string;
+      name?: string;
+      title?: string;
+      originalName?: string;
+      ident?: string;
+    };
+
 let maintenanceTimer: number | undefined;
+let startupMaintenanceTimer: number | undefined;
 let maintenanceRunning = false;
+let currentGraphIsDb = false;
 const knownBoardUuids = new Set<string>();
 let logseqDocument: Document | undefined;
+let boardDomObserver: MutationObserver | undefined;
+
+const BLOCK_ELEMENT_SELECTOR = ".ls-block";
+const BLOCK_UUID_PATTERN =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function getBlockText(block?: Pick<BoardBlock, "content" | "title"> | null): string {
+  if (!block) return "";
+
+  return currentGraphIsDb
+    ? (block.title ?? block.content ?? "")
+    : (block.content ?? block.title ?? "");
+}
+
+async function detectCurrentGraphMode(): Promise<boolean> {
+  const checkCurrentIsDbGraph = logseq.App.checkCurrentIsDbGraph;
+
+  if (typeof checkCurrentIsDbGraph !== "function") return false;
+
+  try {
+    return Boolean(await logseq.App.checkCurrentIsDbGraph());
+  } catch (error) {
+    console.warn(
+      "[Plus Minus Next] Could not detect graph type; using file-graph compatibility mode",
+      error
+    );
+    return false;
+  }
+}
 
 function getLogseqDocument(): Document {
   try {
@@ -74,7 +126,7 @@ function getParentBlockElement(block: HTMLElement): HTMLElement | null {
   let element = block.parentElement;
 
   while (element) {
-    if (element.classList.contains("ls-block")) return element;
+    if (element.matches(BLOCK_ELEMENT_SELECTOR)) return element;
     element = element.parentElement;
   }
 
@@ -83,7 +135,11 @@ function getParentBlockElement(block: HTMLElement): HTMLElement | null {
 
 function isBoardElement(block: HTMLElement): boolean {
   const refs = block.getAttribute("data-refs-self") ?? "";
-  const uuid = block.getAttribute("blockid") ?? "";
+  const uuid =
+    block.getAttribute("blockid") ??
+    block.getAttribute("data-block-id") ??
+    block.getAttribute("data-block-uuid") ??
+    "";
 
   return refs.includes("pmn-board") || knownBoardUuids.has(uuid);
 }
@@ -121,7 +177,7 @@ function keepEmptyEntryInsideColumn(event: KeyboardEvent): void {
 
   if (!isEmpty) return;
 
-  const entryBlock = editor.closest<HTMLElement>(".ls-block");
+  const entryBlock = editor.closest<HTMLElement>(BLOCK_ELEMENT_SELECTOR);
   if (!entryBlock) return;
 
   const columnBlock = getParentBlockElement(entryBlock);
@@ -136,12 +192,20 @@ function keepEmptyEntryInsideColumn(event: KeyboardEvent): void {
   event.stopImmediatePropagation();
 }
 
-function registerBoardUuid(uuid?: string): void {
-  if (!uuid || knownBoardUuids.has(uuid)) return;
+function rememberBoardUuid(uuid?: string): boolean {
+  if (!uuid || knownBoardUuids.has(uuid)) return false;
   knownBoardUuids.add(uuid);
+  return true;
+}
+
+function registerBoardUuid(uuid?: string): void {
+  if (rememberBoardUuid(uuid)) updateBoardStyles();
+}
+
+function updateBoardStyles(): void {
   logseq.provideStyle({
     key: "plus-minus-next-board-styles",
-    style: createStyles([...knownBoardUuids])
+    style: createStyles([...knownBoardUuids], currentGraphIsDb)
   });
 }
 
@@ -154,8 +218,8 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
-function getColumnIndex(block: BoardBlock): number {
-  const content = block.content ?? "";
+function getFileColumnIndex(block: BoardBlock): number {
+  const content = getBlockText(block);
 
   return columnNames.findIndex(
     (columnName, index) =>
@@ -164,33 +228,275 @@ function getColumnIndex(block: BoardBlock): number {
   );
 }
 
-async function maintainCurrentPageBoards(): Promise<void> {
-  if (maintenanceRunning) return;
-  maintenanceRunning = true;
+function getColumnIndex(block: BoardBlock): number {
+  const fileColumnIndex = getFileColumnIndex(block);
+  if (fileColumnIndex >= 0) return fileColumnIndex;
+
+  const content = getBlockText(block);
+  return dbColumnHeadings.findIndex((heading) => heading === content);
+}
+
+function hasFileBoardColumns(block: BoardBlock): boolean {
+  const columnIndexes = new Set(
+    (block.children ?? [])
+      .map(getFileColumnIndex)
+      .filter((index) => index >= 0)
+  );
+
+  return columnNames.every((_, index) => columnIndexes.has(index));
+}
+
+function hasDbBoardColumns(block: BoardBlock): boolean {
+  const columnIndexes = new Set(
+    (block.children ?? [])
+      .map((child) => {
+        const content = getBlockText(child);
+        return dbColumnHeadings.findIndex((heading) => heading === content);
+      })
+      .filter((index) => index >= 0)
+  );
+
+  return columnNames.every((_, index) => columnIndexes.has(index));
+}
+
+function isDbBoardTagName(value?: string): boolean {
+  if (!value) return false;
+
+  const normalized = value.toLowerCase().replace(/^:/, "");
+  return (
+    normalized === DB_BOARD_TAG ||
+    normalized === `.${DB_BOARD_TAG}` ||
+    normalized.endsWith(`/${DB_BOARD_TAG}`)
+  );
+}
+
+function hasDbBoardTag(block: BoardBlock): boolean {
+  const tags = [...(block.tags ?? []), ...(block["block/tags"] ?? [])];
+
+  return tags.some((tag) => {
+    if (typeof tag === "string") return isDbBoardTagName(tag);
+
+    return [tag.name, tag.title, tag.originalName, tag.ident].some(
+      isDbBoardTagName
+    );
+  });
+}
+
+function collectDbQueryUuids(value: unknown, boardUuids: Set<string>): void {
+  if (typeof value === "string") {
+    const uuid = value.match(BLOCK_UUID_PATTERN)?.[0];
+    if (uuid) boardUuids.add(uuid);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectDbQueryUuids(item, boardUuids);
+    return;
+  }
+
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value)) {
+      collectDbQueryUuids(item, boardUuids);
+    }
+  }
+}
+
+function discoverRenderedDbBoards(): boolean {
+  if (!currentGraphIsDb || !logseqDocument) return false;
+
+  let changed = false;
+  const blocks =
+    logseqDocument.querySelectorAll<HTMLElement>(".ls-block[blockid]");
+
+  for (const block of blocks) {
+    const mainContainer = Array.from(block.children).find(
+      (child) => child.classList.contains("block-main-container")
+    );
+    const title = mainContainer?.querySelector<HTMLElement>(
+      ".block-title-wrap"
+    );
+    const normalizedTitle = (title?.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (normalizedTitle !== BOARD_NAME) continue;
+
+    const uuid = block.getAttribute("blockid") ?? undefined;
+    changed = rememberBoardUuid(uuid) || changed;
+  }
+
+  return changed;
+}
+
+function provideInfoIcon(slot: string, description: string): void {
+  const safeSlot = slot.replace(/[^a-zA-Z0-9_-]/g, "-");
+
+  logseq.provideUI({
+    key: `pmn-info-${safeSlot}`,
+    slot,
+    reset: true,
+    template: `
+      <span
+        class="pmn-info"
+        tabindex="0"
+        role="note"
+        aria-label="${escapeHtml(description)}"
+        data-on-click="keepPmnInfoReadOnly"
+      >
+        <span aria-hidden="true">i</span>
+        <span class="pmn-info-tooltip" role="tooltip">
+          ${escapeHtml(description)}
+        </span>
+      </span>
+    `
+  });
+}
+
+async function getDbBoardUuids(): Promise<Set<string>> {
+  if (!currentGraphIsDb) return new Set();
+
+  const tagIdentifiers = new Set<string>([DB_BOARD_TAG]);
 
   try {
+    const tag = await logseq.Editor.getTag(DB_BOARD_TAG);
+    if (tag?.ident) tagIdentifiers.add(tag.ident);
+  } catch (error) {
+    console.warn("[Plus Minus Next] Could not resolve the DB board tag", error);
+  }
+
+  const boardUuids = new Set<string>();
+
+  for (const identifier of tagIdentifiers) {
+    try {
+      const boards = await logseq.Editor.getTagObjects(identifier);
+      for (const board of boards ?? []) {
+        if (typeof board.uuid === "string") boardUuids.add(board.uuid);
+      }
+    } catch (error) {
+      console.warn(
+        `[Plus Minus Next] Could not load DB boards for ${identifier}`,
+        error
+      );
+    }
+  }
+
+  try {
+    const titleQuery = `
+      [:find ?uuid
+       :where
+       [?block :block/title ${JSON.stringify(BOARD_NAME)}]
+       [?block :block/uuid ?uuid]]
+    `;
+    const results = await logseq.DB.datascriptQuery(titleQuery);
+    collectDbQueryUuids(results, boardUuids);
+  } catch (error) {
+    console.warn(
+      "[Plus Minus Next] Could not query DB boards by title",
+      error
+    );
+  }
+
+  return boardUuids;
+}
+
+async function ensureDbBoardTag(blockUuid: string): Promise<void> {
+  const boardTag =
+    (await logseq.Editor.getTag(DB_BOARD_TAG)) ??
+    (await logseq.Editor.createTag(DB_BOARD_TAG));
+
+  if (!boardTag?.uuid) {
+    throw new Error("Logseq could not create the PMN board tag.");
+  }
+
+  await logseq.Editor.addBlockTag(blockUuid, boardTag.uuid);
+}
+
+async function maintainCurrentPageBoards(): Promise<void> {
+  if (maintenanceRunning) {
+    scheduleBoardMaintenance(100);
+    return;
+  }
+
+  maintenanceRunning = true;
+  let boardStylesChanged = false;
+
+  try {
+    boardStylesChanged =
+      discoverRenderedDbBoards() || boardStylesChanged;
+    const dbBoardUuids = await getDbBoardUuids();
     const blocks =
       (await logseq.Editor.getCurrentPageBlocksTree()) as BoardBlock[];
 
     async function visit(block: BoardBlock): Promise<void> {
-      if (block.content?.includes(BOARD_TAG) && block.children) {
-        registerBoardUuid(block.uuid);
-        let precedingColumn: BoardBlock | undefined;
+      const blockText = getBlockText(block);
+      const hasFileBoardTag = blockText.includes(FILE_BOARD_TAG);
+      const hasRecognizableFileColumns =
+        !currentGraphIsDb && hasFileBoardColumns(block);
+      const hasPersistedDbBoardTag =
+        currentGraphIsDb && hasDbBoardTag(block);
+      const hasRecognizableDbBoard =
+        currentGraphIsDb &&
+        blockText === BOARD_NAME &&
+        hasDbBoardColumns(block);
+      const isBoard = currentGraphIsDb
+        ? Boolean(
+            block.uuid &&
+              (dbBoardUuids.has(block.uuid) ||
+                knownBoardUuids.has(block.uuid) ||
+                hasPersistedDbBoardTag ||
+                hasRecognizableDbBoard)
+          )
+        : hasFileBoardTag || hasRecognizableFileColumns;
 
-        for (const child of block.children) {
+      if (isBoard) {
+        boardStylesChanged =
+          rememberBoardUuid(block.uuid) || boardStylesChanged;
+
+        if (
+          !currentGraphIsDb &&
+          !hasFileBoardTag &&
+          hasRecognizableFileColumns &&
+          block.uuid
+        ) {
+          await logseq.Editor.updateBlock(block.uuid, FILE_BOARD_TITLE);
+        }
+
+        if (
+          currentGraphIsDb &&
+          hasRecognizableDbBoard &&
+          !dbBoardUuids.has(block.uuid ?? "") &&
+          !hasPersistedDbBoardTag &&
+          block.uuid
+        ) {
+          await ensureDbBoardTag(block.uuid).catch((error) => {
+            console.warn(
+              "[Plus Minus Next] Could not restore the DB board tag",
+              error
+            );
+          });
+        }
+
+        let precedingColumn: BoardBlock | undefined;
+        for (const child of block.children ?? []) {
           const columnIndex = getColumnIndex(child);
 
           if (columnIndex >= 0) {
             precedingColumn = child;
-            const legacy = legacyColumns[columnIndex];
+            const currentText = getBlockText(child);
+            const replacement = currentGraphIsDb
+              ? dbColumnHeadings[columnIndex]
+              : legacyColumns[columnIndex].replacement;
 
             if (
               child.uuid &&
-              child.content !== undefined &&
-              legacy.contents.includes(child.content)
+              currentText !== replacement &&
+              (currentGraphIsDb ||
+                legacyColumns[columnIndex].contents.includes(currentText) ||
+                dbColumnHeadings[columnIndex] === currentText)
             ) {
-              await logseq.Editor.updateBlock(child.uuid, legacy.replacement);
+              await logseq.Editor.updateBlock(child.uuid, replacement);
             }
+
             continue;
           }
 
@@ -217,6 +523,7 @@ async function maintainCurrentPageBoards(): Promise<void> {
       await visit(block);
     }
   } finally {
+    if (boardStylesChanged) updateBoardStyles();
     maintenanceRunning = false;
   }
 }
@@ -236,18 +543,21 @@ function scheduleBoardMaintenance(delay = 180): void {
 
 async function insertBoard(reuseEmptyCurrentBlock = false): Promise<void> {
   try {
+    currentGraphIsDb = await detectCurrentGraphMode();
+    const boardTitle = currentGraphIsDb ? BOARD_NAME : FILE_BOARD_TITLE;
+    const columns = currentGraphIsDb ? dbColumns : fileColumns;
     const currentBlock = await logseq.Editor.getCurrentBlock();
     let board;
 
     if (currentBlock?.uuid) {
       const canReuseCurrentBlock =
-        reuseEmptyCurrentBlock && (currentBlock.content ?? "").trim() === "";
+        reuseEmptyCurrentBlock && getBlockText(currentBlock).trim() === "";
 
       if (canReuseCurrentBlock) {
-        await logseq.Editor.updateBlock(currentBlock.uuid, BOARD_TITLE);
+        await logseq.Editor.updateBlock(currentBlock.uuid, boardTitle);
         board = await logseq.Editor.getBlock(currentBlock.uuid);
       } else {
-        board = await logseq.Editor.insertBlock(currentBlock.uuid, BOARD_TITLE, {
+        board = await logseq.Editor.insertBlock(currentBlock.uuid, boardTitle, {
           sibling: true
         });
       }
@@ -264,12 +574,16 @@ async function insertBoard(reuseEmptyCurrentBlock = false): Promise<void> {
 
       board = await logseq.Editor.appendBlockInPage(
         currentPage.uuid ?? currentPage.name,
-        BOARD_TITLE
+        boardTitle
       );
     }
 
     if (!board?.uuid) {
       throw new Error("Logseq did not return the new board block.");
+    }
+
+    if (currentGraphIsDb) {
+      await ensureDbBoardTag(board.uuid);
     }
 
     // Register a UUID selector immediately. Unlike Logseq's tag-derived DOM
@@ -281,6 +595,11 @@ async function insertBoard(reuseEmptyCurrentBlock = false): Promise<void> {
     // activates the three-column CSS without a timing race.
     await logseq.Editor.exitEditingMode();
 
+    /*
+     * Do not register onBlockRendererSlotted for DB column blocks. In Logseq
+     * 2.0 that hook intentionally replaces the native outline renderer,
+     * including the column title.
+     */
     await logseq.Editor.insertBatchBlock(board.uuid, columns, {
       sibling: false
     });
@@ -288,6 +607,11 @@ async function insertBoard(reuseEmptyCurrentBlock = false): Promise<void> {
     // Ensure focus restored by the slash-command host cannot leave the parent
     // in its unrendered editing state.
     await logseq.Editor.exitEditingMode();
+
+    // Logseq 0.10 can restore the slash-command editor's previous empty value
+    // after children are inserted. Persist the exact board label once more
+    // after editing has fully ended.
+    await logseq.Editor.updateBlock(board.uuid, boardTitle);
 
   } catch (error) {
     console.error("[Plus Minus Next] Could not insert board", error);
@@ -306,23 +630,40 @@ async function main(): Promise<void> {
     () => insertBoard(true)
   );
 
+  currentGraphIsDb = await detectCurrentGraphMode();
+
   logseqDocument = getLogseqDocument();
   logseqDocument.addEventListener(
     "keydown",
     keepEmptyEntryInsideColumn as EventListener,
     true
   );
+  boardDomObserver = new MutationObserver(() => {
+    if (currentGraphIsDb) scheduleBoardMaintenance(120);
+  });
+  boardDomObserver.observe(logseqDocument.body, {
+    childList: true,
+    subtree: true
+  });
   logseq.beforeunload(async () => {
     logseqDocument?.removeEventListener(
       "keydown",
       keepEmptyEntryInsideColumn as EventListener,
       true
     );
+
+    if (maintenanceTimer !== undefined) {
+      window.clearTimeout(maintenanceTimer);
+    }
+    if (startupMaintenanceTimer !== undefined) {
+      window.clearTimeout(startupMaintenanceTimer);
+    }
+    boardDomObserver?.disconnect();
   });
 
   logseq.provideStyle({
     key: "plus-minus-next-board-styles",
-    style: createStyles()
+    style: createStyles([], currentGraphIsDb)
   });
 
   logseq.provideModel({
@@ -341,27 +682,7 @@ async function main(): Promise<void> {
 
       const description =
         columnDescriptions[columnName as keyof typeof columnDescriptions];
-      const safeSlot = slot.replace(/[^a-zA-Z0-9_-]/g, "-");
-
-      logseq.provideUI({
-        key: `pmn-info-${safeSlot}`,
-        slot,
-        reset: true,
-        template: `
-          <span
-            class="pmn-info"
-            tabindex="0"
-            role="note"
-            aria-label="${escapeHtml(description)}"
-            data-on-click="keepPmnInfoReadOnly"
-          >
-            <span aria-hidden="true">i</span>
-            <span class="pmn-info-tooltip" role="tooltip">
-              ${escapeHtml(description)}
-            </span>
-          </span>
-        `
-      });
+      provideInfoIcon(slot, description);
     }
   );
 
@@ -369,8 +690,31 @@ async function main(): Promise<void> {
     console.warn("[Plus Minus Next] Could not upgrade this page", error);
   });
 
+  /*
+   * Logseq 0.10 can finish restoring the last blocks on a page shortly after
+   * plugin startup. Rescan once after that restore and publish one complete
+   * UUID-based stylesheet for every board.
+   */
+  startupMaintenanceTimer = window.setTimeout(() => {
+    startupMaintenanceTimer = undefined;
+    scheduleBoardMaintenance(0);
+  }, 800);
+
   logseq.App.onRouteChanged(() => {
     scheduleBoardMaintenance(100);
+  });
+
+  logseq.App.onCurrentGraphChanged?.(() => {
+    detectCurrentGraphMode()
+      .then((isDbGraph) => {
+        currentGraphIsDb = isDbGraph;
+        knownBoardUuids.clear();
+        updateBoardStyles();
+        scheduleBoardMaintenance(0);
+      })
+      .catch((error) => {
+        console.warn("[Plus Minus Next] Could not detect graph type", error);
+      });
   });
 
   logseq.DB.onChanged(() => {

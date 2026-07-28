@@ -5,10 +5,12 @@
   "main": "dist/index.html",
   "scripts": {
     "build": "node build.mjs",
+    "clean": "node scripts/clean.mjs",
     "dev": "node build.mjs --watch",
     "typecheck": "tsc --noEmit",
     "validate:release": "node scripts/validate-release.mjs",
-    "check": "npm run typecheck && npm run build && npm run validate:release"
+    "check": "npm run typecheck && npm run build && npm run validate:release",
+    "test": "npm run clean && npm run check"
   },
   "keywords": [
     "logseq",

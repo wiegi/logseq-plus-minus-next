@@ -7,6 +7,7 @@ const marketplaceManifest = JSON.parse(
 const readme = await readFile("README.md", "utf8");
 const changelog = await readFile("CHANGELOG.md", "utf8");
 const mainEntry = await readFile(pkg.main, "utf8");
+const mainSource = await readFile("src/main.ts", "utf8");
 const bundlePath = "dist/index.js";
 const bundle = await readFile(bundlePath, "utf8");
 
@@ -30,6 +31,15 @@ requireValue("Logseq plugin icon", pkg.logseq?.icon);
 if (marketplaceManifest.effect !== true) {
   failures.push(
     "marketplace manifest must enable the same-origin sandbox for editor key handling"
+  );
+}
+
+if (
+  marketplaceManifest.supportsDB !== true ||
+  marketplaceManifest.supportsDBOnly !== false
+) {
+  failures.push(
+    "marketplace manifest must support both DB and file graphs"
   );
 }
 
@@ -66,8 +76,20 @@ if (!mainEntry.includes("./index.js")) {
   failures.push(`${pkg.main} does not load the plugin bundle`);
 }
 
-if (!bundle.includes("pmn-board") || !bundle.includes("registerSlashCommand")) {
+if (
+  !bundle.includes("pmn-board") ||
+  !bundle.includes("registerSlashCommand") ||
+  !bundle.includes("checkCurrentIsDbGraph") ||
+  !bundle.includes("addBlockTag")
+) {
   failures.push("built bundle does not contain the expected plugin entry points");
+}
+
+if (
+  !mainSource.includes('const BOARD_NAME = "Plus · Minus · Next"') ||
+  !mainSource.includes('const FILE_BOARD_TAG = "#.pmn-board"')
+) {
+  failures.push("source does not define the expected file-graph board title");
 }
 
 const bundleStats = await stat(bundlePath);
